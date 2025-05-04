@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use azure_core::{error::HttpError, RetryOptions};
+use azure_core::credentials::TokenCredential;
+use azure_core::{error::HttpError, http::RetryOptions};
 use azure_storage::{prelude::*, CloudLocation, ConnectionString};
 use azure_storage_blobs::{blob::operations::PutBlockBlobResponse, prelude::*};
 use bytes::Bytes;
@@ -160,7 +161,7 @@ pub fn build_client(
             .container_client(container_name);
         }
         (None, Some(storage_account_p)) => {
-            let creds = azure_identity::create_default_credential()?;
+            let creds: Arc<dyn TokenCredential> = azure_identity::DefaultAzureCredential::new()?;
             let storage_credentials = StorageCredentials::token_credential(creds);
 
             client = match endpoint {

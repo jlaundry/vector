@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use azure_core::auth::TokenCredential;
+use azure_core::credentials::TokenCredential;
+use azure_identity::DefaultAzureCredential;
 use vector_lib::configurable::configurable_component;
 use vector_lib::schema;
 use vrl::value::Kind;
@@ -136,7 +137,7 @@ impl AzureLogsIngestionConfig {
             .limit_max_bytes(MAX_BATCH_SIZE)?
             .into_batcher_settings()?;
 
-        let credential: Arc<dyn TokenCredential> = azure_identity::create_credential()?;
+        let credential: Arc<dyn TokenCredential> = DefaultAzureCredential::new()?;
 
         let tls_settings = TlsSettings::from_options(self.tls.as_ref())?;
         let client = HttpClient::new(Some(tls_settings), &cx.proxy)?;

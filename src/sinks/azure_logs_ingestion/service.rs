@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::task::{Context, Poll};
 
-use azure_core::auth::TokenCredential;
+use azure_core::credentials::TokenCredential;
 
 use bytes::Bytes;
 use http::{
