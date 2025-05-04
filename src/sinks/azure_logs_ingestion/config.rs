@@ -127,6 +127,7 @@ impl AzureLogsIngestionConfig {
         stream_name: String,
         token_scope: String,
         timestamp_field: String,
+        credential: Option<Arc<dyn TokenCredential>>,
     ) -> crate::Result<(VectorSink, Healthcheck)> {
         let endpoint = endpoint.with_default_parts().uri;
         let protocol = get_http_scheme_from_uri(&endpoint).to_string();
@@ -137,7 +138,7 @@ impl AzureLogsIngestionConfig {
             .limit_max_bytes(MAX_BATCH_SIZE)?
             .into_batcher_settings()?;
 
-        let credential: Arc<dyn TokenCredential> = DefaultAzureCredential::new()?;
+        let service_credential: Arc<dyn TokenCredential> = credential.unwrap_or(DefaultAzureCredential::new()?);
 
         let tls_settings = TlsSettings::from_options(self.tls.as_ref())?;
         let client = HttpClient::new(Some(tls_settings), &cx.proxy)?;
@@ -147,7 +148,7 @@ impl AzureLogsIngestionConfig {
             endpoint,
             dcr_immutable_id,
             stream_name,
-            credential,
+            service_credential,
             token_scope,
         )?;
         let healthcheck = service.healthcheck();
@@ -185,6 +186,7 @@ impl SinkConfig for AzureLogsIngestionConfig {
             self.stream_name.clone(),
             self.token_scope.clone(),
             self.timestamp_field.clone(),
+            None,
         )
         .await
     }
