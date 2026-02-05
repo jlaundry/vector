@@ -2,11 +2,11 @@ use azure_core::http::ClientOptions;
 use bytes::Bytes;
 use futures::stream;
 use http::Response;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
 use vector_lib::config::log_schema;
 
-use azure_core::cloud::{Audiences, CloudConfiguration, CustomConfiguration};
 use azure_core::credentials::{AccessToken, TokenCredential};
 use azure_core::time::OffsetDateTime;
 use azure_identity::{
@@ -177,11 +177,35 @@ fn insert_timestamp_kv(log: &mut LogEvent) -> (String, String) {
     )
 }
 
+#[derive(Debug, Clone)]
+struct UrlReplacingPolicy {
+    url: url::Url,
+}
+
+impl UrlReplacingPolicy {
+    fn new(url: url::Url) -> Self {
+        Self { url }
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+impl azure_core::http::policies::Policy for UrlReplacingPolicy {
+    async fn send(
+        &self,
+        ctx: &azure_core::http::Context,
+        request: &mut azure_core::http::Request,
+        next: &[Arc<dyn azure_core::http::policies::Policy>],
+    ) -> azure_core::http::policies::PolicyResult {
+        *request.url_mut() = self.url.clone();
+        next[0].send(ctx, request, &next[1..]).await
+    }
+}
+
 #[tokio::test]
-async fn correct_request() {
-    // Other tests can use `create_mock_credential`, we're going to run this end-to-end test with our own mock OAuth endpoint as well
+async fn correct_request_with_mock_token_authority() {
     let (authority_tx, mut _authority_rx) = tokio::sync::mpsc::channel(1);
-    let mock_token_authority = spawn_blackhole_http_server(move |request| {
+    let mock_token_authority: http::Uri = spawn_blackhole_http_server(move |request| {
         let authority_tx = authority_tx.clone();
         async move {
             authority_tx.send(request).await.unwrap();
@@ -200,12 +224,7 @@ async fn correct_request() {
     })
     .await;
 
-    let mut mock_cloud_configuration: CustomConfiguration = CustomConfiguration::default();
-    mock_cloud_configuration.audiences = Audiences::new().with::<String>("http://mock.invalid".to_string());
-    mock_cloud_configuration.authority_host = mock_token_authority.to_string();
-    let cloud_configuration: CloudConfiguration = mock_cloud_configuration.into();
-
-    let credential: std::sync::Arc<dyn TokenCredential> = ClientSecretCredential::new(
+    let credential: Arc<dyn TokenCredential> = ClientSecretCredential::new(
         "00000000-0000-0000-0000-000000000000",
         "mock-client-id".into(),
         "mock-client-secret".into(),
@@ -213,7 +232,9 @@ async fn correct_request() {
             {
                 client_options: ClientOptions
                 {
-                    cloud: Some(std::sync::Arc::new(cloud_configuration)),
+                    per_call_policies: vec![Arc::new(UrlReplacingPolicy::new(
+                        url::Url::parse(&mock_token_authority.to_string()).unwrap(),
+                    ))],
                     ..Default::default()
                 }
             }
@@ -363,7 +384,7 @@ async fn mock_healthcheck_with_400_response() {
     .await;
 
     let context = SinkContext::default();
-    let credential = std::sync::Arc::new(create_mock_credential());
+    let credential = Arc::new(create_mock_credential());
 
     let (_sink, healthcheck) = config
         .build_inner(
@@ -432,7 +453,7 @@ async fn mock_healthcheck_with_403_response() {
     .await;
 
     let context = SinkContext::default();
-    let credential = std::sync::Arc::new(create_mock_credential());
+    let credential = Arc::new(create_mock_credential());
 
     let (_sink, healthcheck) = config
         .build_inner(
