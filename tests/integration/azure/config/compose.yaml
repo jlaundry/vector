@@ -15,6 +15,10 @@ services:
       - ../../../data/ca/intermediate_server/certs:/certs
       - ../../../data/ca/intermediate_server/private/azurite.key.pem:/private/azurite.key.pem
 
+  sentinull:
+    image: ghcr.io/jlaundry/sentinull:latest
+    command: sentinull --listen 0.0.0.0:8564
+
 networks:
   default:
     name: ${VECTOR_NETWORK}

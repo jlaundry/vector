@@ -6,6 +6,7 @@ test_filter: ::azure_
 env:
   AZURITE_ADDRESS: local-azure-blob
   AZURITE_OAUTH_ADDRESS: azurite
+  SENTINULL_ADDRESS: http://sentinull:8564
   HEARTBEAT_ADDRESS: 0.0.0.0:8080
   LOGSTASH_ADDRESS: 0.0.0.0:8081
 
